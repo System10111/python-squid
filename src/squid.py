@@ -56,6 +56,9 @@ class Squid():
     body: pm.Body
     body_tip: pm.Body
     body_texture: pr.Texture2D
+    tentacle_texture: pr.Texture2D
+    ltentacle_texture: pr.Texture2D
+    body_segments: list[tuple[pm.Body, pm.DampedRotarySpring, pm.RotaryLimitJoint]]
     tentacles: list[list[tuple[pm.Body, pm.DampedRotarySpring, pm.SimpleMotor]]]
     ltentacles: list[list[tuple[pm.Body, pm.DampedRotarySpring, pm.SimpleMotor]]]
     # cur_anim: Animation = None
@@ -63,9 +66,16 @@ class Squid():
     anim_speed = 1.0
     anim_time = 0.0
 
-    def __init__(self, position: Vec2, texture: pr.Texture2D, space: pm.Space):
-        base_segment_size = Vec2(texture.width, texture.height/4)
+    def __init__(self, position: Vec2, 
+        texture: pr.Texture2D, 
+        tentacle_texture: pr.Texture2D, 
+        ltentacle_texture: pr.Texture2D, 
+        space: pm.Space
+        ):
+        base_segment_size = Vec2(32, 16)
         self.body_texture = texture
+        self.tentacle_texture = tentacle_texture
+        self.ltentacle_texture = ltentacle_texture
         # create body
         self.body = pm.Body()
         self.body.position = position
@@ -78,8 +88,9 @@ class Squid():
 
         # segment the body so it acts more like a soft body
         last_body = self.body
+        self.body_segments = []
         for i in range(1, N_BODY_SEGMENTS):
-            scl = [1.0, 0.95, 0.90, 0.75][i]
+            scl = [1.0, 0.80, 0.80, 0.90][i]
             b_body = pm.Body()
             b_body.position = last_body.position + Vec2(0, base_segment_size.y/2)
             b_shape = pm.Poly.create_box(b_body, (base_segment_size.x * scl, base_segment_size.y), 1.0)
@@ -95,6 +106,8 @@ class Squid():
             last_body = b_body
             space.add(b_body, b_shape, b_joint, b_rotary_spring, b_rotary_limit)
 
+            self.body_segments.append((b_body, b_rotary_spring, b_rotary_limit))
+
         self.body_tip = last_body
 
         # create tentacles
@@ -103,9 +116,9 @@ class Squid():
             # each tentacle is a list of tuples for each segment (body, constraint)
             tentacle = []
             last_body = self.body
-            last_anchor = (texture.width * 0.40 * x_prc, base_segment_size.y/2)
+            last_anchor = (base_segment_size.x * 0.40 * x_prc, base_segment_size.y/2)
             for j in range(N_TENTACLE_SEGMENTS):
-                t_size = Vec2(7 - j, 18)
+                t_size = Vec2(7 - j, 20)
                 t_body = pm.Body()
                 t_body.position = last_body.position + last_anchor + Vec2(0, t_size.y/2)
                 t_shape = pm.Poly.create_box(t_body, t_size, 1.0)
@@ -139,11 +152,11 @@ class Squid():
         for i, x_prc in enumerate([-1.0, 1.0]):
             tentacle = []
             last_body = self.body
-            last_anchor = (texture.width * 0.50 * x_prc, base_segment_size.y/2)
+            last_anchor = (base_segment_size.x * 0.50 * x_prc, base_segment_size.y/2)
             for j in range(N_LTENTACLE_SEGMENTS):
                 is_last = j == N_LTENTACLE_SEGMENTS - 1
 
-                t_size = Vec2(5 - int(j/2), 19) if not is_last else Vec2(7, 12)
+                t_size = Vec2(5 - int(j/2), 20) if not is_last else Vec2(8, 16)
                 t_body = pm.Body()
                 t_body.position = last_body.position + last_anchor + Vec2(0, t_size.y/2)
                 t_shape = pm.Poly.create_box(t_body, t_size, 1.0)
@@ -173,7 +186,6 @@ class Squid():
 
 
             self.ltentacles.append(tentacle)
-
 
     def update(self, dt: float):
         # set the tentacles' motor rates depending on the animation and the current angle between segments
@@ -211,18 +223,99 @@ class Squid():
 
         self.anim_time += dt
 
-    def draw(self):
+    def draw(self, mpos: Vec2):
         """Draw the squid"""
+        
+        # draw the base segment
         pr.draw_texture_pro(self.body_texture, 
-            (0, 0, self.body_texture.width, self.body_texture.height),
+            (0, self.body_texture.height * 3/4, self.body_texture.width, self.body_texture.height/4),
             (self.body.position.x,
                 self.body.position.y, 
-                self.body_texture.width, 
-                self.body_texture.height),
-            (self.body_texture.width/2, self.body_texture.height/2),
+                self.body_texture.width*2, 
+                self.body_texture.height*2/4),
+            (self.body_texture.width*2/2, self.body_texture.height*2/4/2),
             self.body.angle * 180 / 3.14159,
             pr.WHITE
         )
+
+        # draw the eyes
+        for eye_center in [(-9, -3), (9, -3)]:
+            eye_center = self.body.local_to_world(eye_center)
+            dir_to_mouse = (mpos - eye_center).normalized()
+            eye_center += dir_to_mouse * 2
+            pr.draw_rectangle_pro(
+                (eye_center.x, eye_center.y, 4, 4),
+                (2, 2),
+                self.body.angle * 180 / 3.14159,
+                pr.BLACK
+            )
+
+        # draw the other body segments
+        for i, seg in enumerate(self.body_segments):
+            seg_body = seg[0]
+
+            pr.draw_texture_pro(self.body_texture,
+                (0, self.body_texture.height * (2-i)/4, self.body_texture.width, self.body_texture.height/4),
+                (seg_body.position.x,
+                    seg_body.position.y, 
+                    self.body_texture.width*2, 
+                    self.body_texture.height*2/4),
+                (self.body_texture.width*2/2, self.body_texture.height*2/4/2),
+                seg_body.angle * 180 / 3.14159,
+                pr.WHITE
+            )
+
+        # draw the long tentacles
+        for i, tentacle in enumerate(self.ltentacles):
+            for j, (t_body, t_rotary_spring, t_motor) in enumerate(tentacle):
+                if j < N_LTENTACLE_SEGMENTS - 1:
+                    pr.draw_texture_pro(self.ltentacle_texture,
+                        (0 if i < 1 else self.ltentacle_texture.width, 
+                            (self.ltentacle_texture.height-8) * j / (len(tentacle)-1), 
+                            self.ltentacle_texture.width if i < 1 else -self.ltentacle_texture.width, 
+                            (self.ltentacle_texture.height-8) / (len(tentacle))-1),
+                        (t_body.position.x,
+                            t_body.position.y, 
+                            self.ltentacle_texture.width*2, 
+                            (self.ltentacle_texture.height-8)*2 / (len(tentacle)-1)),
+                        (self.ltentacle_texture.width*2/2, (self.ltentacle_texture.height-8)*2/(len(tentacle)-1)/2),
+                        t_body.angle * 180 / 3.14159,
+                        pr.WHITE
+                    )
+                else: # draw the "hand"
+                    pr.draw_texture_pro(self.ltentacle_texture,
+                        (0 if i < 1 else self.ltentacle_texture.width, 
+                            self.ltentacle_texture.height-8, 
+                            self.ltentacle_texture.width if i < 1 else -self.ltentacle_texture.width, 
+                            8),
+                        (t_body.position.x,
+                            t_body.position.y, 
+                            self.ltentacle_texture.width*2, 
+                            16),
+                        (self.ltentacle_texture.width*2/2, 16/2),
+                        t_body.angle * 180 / 3.14159,
+                        pr.WHITE
+                    )
+                
+
+        # draw the tentacles
+        for i, tentacle in enumerate(self.tentacles):
+            for j, (t_body, t_rotary_spring, t_motor) in enumerate(tentacle):
+                # the tentacle texture is separated into segments of 5 pixels
+                # the texture should be horizontally flipped if the tentacle is on the right side of the squid
+                pr.draw_texture_pro(self.tentacle_texture,
+                    (0 if i < 2 else self.tentacle_texture.width, 
+                        self.tentacle_texture.height * j / len(tentacle), 
+                        self.tentacle_texture.width if i < 2 else -self.tentacle_texture.width, 
+                        self.tentacle_texture.height / len(tentacle)),
+                    (t_body.position.x,
+                        t_body.position.y, 
+                        self.tentacle_texture.width*2, 
+                        self.tentacle_texture.height*2 / len(tentacle)),
+                    (self.tentacle_texture.width*2/2, self.tentacle_texture.height*2/len(tentacle)/2),
+                    t_body.angle * 180 / 3.14159,
+                    pr.WHITE
+                )
 
     def set_pose(self, pose: Pose = None):
         """

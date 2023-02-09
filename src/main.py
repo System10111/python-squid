@@ -63,8 +63,12 @@ def main():
     pr.init_window(int(window_size.x), int(window_size.y), "Squid")
     pr.set_target_fps(60)
  
+
+    debug_options = {
+        "draw_collision": True
+    }
+
     # Load textures
-    squid_body = pr.load_texture(os.path.join("res", "squid-body.png"))
     guy1 = pr.load_texture(os.path.join("res", "guy1.png"))
 
     # Create a camera
@@ -81,7 +85,11 @@ def main():
     # space.damping = 0.01
     
     # Create the squid
-    squid = Squid(Vec2(300, 300), squid_body, space) 
+    squid = Squid(Vec2(300, 300), 
+        pr.load_texture(os.path.join("res", "squid-body.png")), 
+        pr.load_texture(os.path.join("res", "squid-tentacle.png")),
+        pr.load_texture(os.path.join("res", "squid-ltentacle.png")),
+        space) 
 
     # Create the level
     walls = load_walls(os.path.join("res", "walls.json"))
@@ -106,14 +114,8 @@ def main():
         ### UPDATE ###
 
         # Update the camera
-        if pr.is_key_down(pr.KEY_W):
-            camera.target.y -= 100.0 * dt
-        if pr.is_key_down(pr.KEY_S):
-            camera.target.y += 100.0 * dt
-        if pr.is_key_down(pr.KEY_A):
-            camera.target.x -= 100.0 * dt
-        if pr.is_key_down(pr.KEY_D):
-            camera.target.x += 100.0 * dt
+        if pr.is_key_pressed(pr.KEY_F1):
+            debug_options["draw_collision"] = not debug_options["draw_collision"]
 
         if pr.is_key_pressed(pr.KEY_ENTER):
             # save the walls to a json file
@@ -255,9 +257,10 @@ def main():
         for x in range(int(squid.body.position.x/100) - 10, int(squid.body.position.x/100) + 10):
             pr.draw_texture(guy1, x*100, 0, pr.WHITE)
 
-        squid.draw()
+        squid.draw(mpos=mouse_pos)
 
-        space.debug_draw(draw_options)
+        if debug_options["draw_collision"]:
+            space.debug_draw(draw_options)
 
         pr.end_mode_2d()
         # Draw the ui
@@ -272,7 +275,8 @@ def main():
         pr.end_drawing()
     
     # Close the window
-    pr.unload_texture(squid_body)
+    pr.unload_texture(squid.body_texture)
+    pr.unload_texture(squid.tentacle_texture)
     pr.close_window()
 
 if __name__ == "__main__":
