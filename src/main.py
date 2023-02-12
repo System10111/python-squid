@@ -1,5 +1,6 @@
 import os
 import json
+import random
 
 import math
 import pyray as pr
@@ -7,8 +8,10 @@ import pymunk as pm
 from pymunk.vec2d import Vec2d as Vec2
 
 from squid import Squid, DEFAULT_POSE, PRE_PUSH_POSE, BALANCE_POSE
-
 from ship import Ship
+from fish import Fish, FISH_GROUP, FISH_CATEGORY
+
+WALL_CATEGORY = 0b10
 
 class RLDrawOptions(pm.SpaceDebugDrawOptions):
     """ A class that implements the pymunk debug draw options interface for pyray """
@@ -66,12 +69,30 @@ def main():
  
 
     debug_options = {
-        "draw_collision": True
+        "draw_collision": False,
+        "wall_placement": False,
     }
 
-    # Load textures
-    guy1 = pr.load_texture(os.path.join("res", "guy1.png"))
-    boat_texture = pr.load_texture(os.path.join("res", "boat.png"))
+    game_data = {
+        "textures" : {
+            "level": pr.load_texture(os.path.join("res", "level.png")),
+            "squid_body": pr.load_texture(os.path.join("res", "squid-body.png")),
+            "squid_tentacle": pr.load_texture(os.path.join("res", "squid-tentacle.png")),
+            "squid_ltentacle": pr.load_texture(os.path.join("res", "squid-ltentacle.png")),
+            "guy1": pr.load_texture(os.path.join("res", "guy1.png")),
+            "guy2": pr.load_texture(os.path.join("res", "guy2.png")),
+            "boat": pr.load_texture(os.path.join("res", "boat.png")),
+            "water": pr.load_texture(os.path.join("res", "water.png")),
+            "fish": pr.load_texture(os.path.join("res", "fish.png")),
+        },
+        "animation_data": {
+            "guy2": json.load(open(os.path.join("res", "guy2.json"), "r")),
+            "water": json.load(open(os.path.join("res", "water.json"), "r")),
+            "fish": json.load(open(os.path.join("res", "fish.json"), "r")),
+        }
+    }
+
+    level_rect = (0, -380, game_data["textures"]["level"].width, game_data["textures"]["level"].height)
 
     # Create a camera
     camera = pr.Camera2D((0, 0), (0, 0), 0, 1)
@@ -86,19 +107,15 @@ def main():
     # space.damping = 0.01
     
     # Create the squid
-    squid = Squid(Vec2(300, 100), 
-        pr.load_texture(os.path.join("res", "squid-body.png")), 
-        pr.load_texture(os.path.join("res", "squid-tentacle.png")),
-        pr.load_texture(os.path.join("res", "squid-ltentacle.png")),
-        space) 
+    squid = Squid(game_data, Vec2(300, 100), space) 
 
     # Create the level
     walls = load_walls(os.path.join("res", "walls.json"))
-    level = pr.load_texture(os.path.join("res", "test_level.png"))
     #add all the walls to the physics space
     for wall in walls:
         shape = pm.Segment(space.static_body, (wall[0], wall[1]), (wall[2], wall[3]), 0)
         shape.friction = 0.1
+        shape.filter = pm.ShapeFilter(categories=WALL_CATEGORY)
         space.add(shape)
     
     # setup gameplay variables
@@ -108,7 +125,25 @@ def main():
 
     game_objects = [squid]
 
-    game_objects.append(Ship(squid.body.position + Vec2(30, -100), boat_texture, space, []))
+    game_objects.append(Ship(game_data, squid.body.position + Vec2(30, -100), space, []))
+
+    # spawn boats
+    ship_x = 100
+    while ship_x < 2100:
+        ship_x += random.randint(200, 500)
+        ship_y = -4
+        game_objects.append(Ship(game_data, Vec2(ship_x, ship_y), space, walls))
+    
+    ship_x = 4500
+    while ship_x < 7200:
+        ship_x += random.randint(200, 500)
+        ship_y = -4
+        game_objects.append(Ship(game_data, Vec2(ship_x, ship_y), space, walls))
+
+    water_tiles = [0] * 20
+
+    fish_spawn_cooldown = 0.0
+    fish_spawn_cooldown_max = 2.0
 
     # Run the game loop
     while not pr.window_should_close():
@@ -118,21 +153,24 @@ def main():
         mouse_pos = Vec2(mouse_pos.x, mouse_pos.y)
         ### UPDATE ###
 
+        for i in range(0, len(water_tiles)):
+            if random.random() < 0.01:
+                water_tiles[i] += 1
+                if water_tiles[i] >= 3:
+                    water_tiles[i] = 0
+
         # Update the camera
         if pr.is_key_pressed(pr.KEY_F1):
             debug_options["draw_collision"] = not debug_options["draw_collision"]
 
-        if pr.is_key_pressed(pr.KEY_ENTER):
-            # save the walls to a json file
-            data = {"walls": walls}
-            with open(os.path.join("res", "walls.json"), "w") as f:
-                json.dump(data, f, indent=4)
+        if pr.is_key_pressed(pr.KEY_F2):
+            debug_options["wall_placement"] = not debug_options["wall_placement"]
 
         if pr.is_key_down(pr.KEY_T):
             squid.body.apply_force_at_local_point((0, 1000), (0, 0))
 
         # adding walls
-        if False:
+        if debug_options["wall_placement"]:
             if pr.is_mouse_button_pressed(pr.MOUSE_LEFT_BUTTON):
                 # Calculate the position of the mouse in the world
                 mouse_pos = pr.get_mouse_position()
@@ -145,6 +183,21 @@ def main():
                 mouse_pos = Vec2(mouse_pos.x, mouse_pos.y)
                 walls[-1][2] = mouse_pos.x
                 walls[-1][3] = mouse_pos.y
+            if pr.is_key_down(pr.KEY_BACKSPACE):
+                walls.pop()
+            if pr.is_key_down(pr.KEY_S):
+                camera.target.y += 10
+            if pr.is_key_down(pr.KEY_W):
+                camera.target.y -= 10
+            if pr.is_key_down(pr.KEY_A):
+                camera.target.x -= 10
+            if pr.is_key_down(pr.KEY_D):
+                camera.target.x += 10
+            if pr.is_key_pressed(pr.KEY_ENTER):
+                # save the walls to a json file
+                data = {"walls": walls}
+                with open(os.path.join("res", "walls.json"), "w") as f:
+                    json.dump(data, f, indent=4)
 
         in_water = squid.body.position.y > 0
 
@@ -161,7 +214,7 @@ def main():
             vel_len = squid.body.velocity.length
             vel_dir = Vec2(squid.body.velocity.x, squid.body.velocity.y).normalized()
 
-            scl_angle_diff = min(abs(angle_diff)*10, 1) * (angle_diff / abs(angle_diff))
+            scl_angle_diff = (min(abs(angle_diff)*10, 1) * (angle_diff / abs(angle_diff))) if angle_diff != 0 else 0
 
             if in_water:
                 # turn_speed *= 1 - 0.6 * min(vel_len / 100, 1)
@@ -200,7 +253,7 @@ def main():
                 # slow down the squid if it is moving backwards relative to its body
                 if squid_dir.dot(vel_dir) > 0.2:
                     squid.body.velocity *= 0.9
-                                       
+        
             else:
                 # if we bulid enough push, we do a 'good push'
                 if not good_push and push_buildup > 0.1:
@@ -241,6 +294,29 @@ def main():
                     good_push = False            
                     squid.set_pose(DEFAULT_POSE)
 
+            fish_spawn_cooldown -= dt
+
+            if vel_len > 10:
+                # spawn some fish
+                if (random.random() < 0.01 and fish_spawn_cooldown <= 0.0) or pr.is_key_pressed(pr.KEY_F5):
+                    
+                    spawn_pos = squid.body.position + (vel_dir * (random.random() * 300 + 300)).rotated(random.random() * 0.5 - 0.25)
+                    # check that the fish is not spawning inside a wall,
+                    # above the water, or near a lot of other fish
+                    in_level = spawn_pos.x > level_rect[0] and \
+                        spawn_pos.x < level_rect[0] + level_rect[2] and \
+                        spawn_pos.y > level_rect[1] and \
+                        spawn_pos.y < level_rect[1] + level_rect[3]
+                    if in_level and \
+                       not space.bb_query(pm.BB(spawn_pos.x-10, spawn_pos.y-10, spawn_pos.x+10, spawn_pos.y+10), pm.ShapeFilter()) and\
+                       not spawn_pos.y < 0 and \
+                       not len(space.bb_query(pm.BB(spawn_pos.x-200, spawn_pos.y-200, spawn_pos.x+200, spawn_pos.y+200), 
+                        pm.ShapeFilter(categories=FISH_CATEGORY, mask=FISH_CATEGORY))) > 3:
+                        fish = Fish(game_data, spawn_pos, space)
+                        game_objects.append(fish)
+                        fish_spawn_cooldown = fish_spawn_cooldown_max
+                    
+
 
         if not pr.is_mouse_button_down(pr.MOUSE_LEFT_BUTTON) and pr.is_mouse_button_down(pr.MOUSE_RIGHT_BUTTON):
             squid.reach(mouse_pos)
@@ -251,7 +327,8 @@ def main():
         # Update the game objects
         for obj in game_objects:
             obj.update(dt)
-        camera.target = squid.body.position
+        if not debug_options["wall_placement"]:
+            camera.target = squid.body.position
 
         ### DRAWING ###
         pr.begin_drawing()
@@ -259,26 +336,36 @@ def main():
         pr.begin_mode_2d(camera)
 
         # Draw the level
-        pr.draw_texture(level, 0, 0, pr.WHITE)
-
-        # to help with debugging, draw a guy1 every 100 horizontal pixels
-        # draw only about 20 of them centered around the squid, so we don't draw too many
-        # and slow down the game
-        for x in range(int(squid.body.position.x/100) - 10, int(squid.body.position.x/100) + 10):
-            pr.draw_texture_ex(guy1, (x*100, 0), 0, 2, pr.WHITE)
+        pr.draw_texture_ex(game_data["textures"]["level"], (0, level_rect[1]), 0, 2, pr.WHITE)
 
         for obj in game_objects:
             obj.draw(mouse_pos)
 
+        # draw the water
+        for x in range(int(squid.body.position.x/64) - 10, int(squid.body.position.x/64) + 10):
+            frame = water_tiles[x % len(water_tiles)]
+            pr.draw_texture_pro(
+                game_data["textures"]["water"],
+                (32 * frame, 0, 32, 16),
+                (x*64, 8, 64, 32),
+                (16, 16),
+                0,
+                pr.WHITE
+            )
+
         if debug_options["draw_collision"]:
             space.debug_draw(draw_options)
+
+        if debug_options["wall_placement"]:
+            for wall in walls:
+                pr.draw_line(int(wall[0]), int(wall[1]), int(wall[2]), int(wall[3]), pr.RED)
 
         pr.end_mode_2d()
         # Draw the ui
         ui_camera = pr.Camera2D((0, 0), (0, 0), 0, 1)
         pr.begin_mode_2d(ui_camera)
 
-        pr.draw_rectangle(100, 50, 100, 10, pr.GRAY)
+        pr.draw_rectangle(100, 50, 200, 10, pr.GRAY)
         pr.draw_rectangle(102, 52, int(push_buildup/MAX_PUSH_BUILDUP*96 + 0.5), 6, pr.WHITE)
         pr.draw_text("%.3f" % round(squid.body.velocity.length/3, 3) + " km/h", 100, 30, 10, pr.WHITE)
 
@@ -286,9 +373,8 @@ def main():
         pr.end_drawing()
     
     # Close the window
-    pr.unload_texture(squid.body_texture)
-    pr.unload_texture(squid.tentacle_texture)
-    pr.unload_texture(squid.ltentacle_texture)
+    for tex in game_data["textures"].values():
+        pr.unload_texture(tex)
     pr.close_window()
 
 if __name__ == "__main__":

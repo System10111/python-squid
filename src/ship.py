@@ -1,54 +1,37 @@
 import math
+import random
 
 import pyray as pr
 import pymunk as pm
 from pymunk.vec2d import Vec2d as Vec2
 
+from human import Human
+
+from utils import calc_boyancy
+
 SHIP_HULL_GROUP = 20
-
-def calc_boyancy(ship: pm.Body) -> tuple[float, Vec2]:
-    # total area under water
-    total = 0
-    # we also need the center of gravity of the underwater part
-    center = Vec2(0, 0)
-    for shape in ship.shapes:
-        new_verts = []
-        for vert in shape.get_vertices():
-            vert = ship.local_to_world(vert)
-            if vert.y > 0:
-                new_verts.append(vert)
-            else:
-                new_verts.append(Vec2(vert.x, 0))
-        new_poly = pm.Poly(None, new_verts)
-        area = new_poly.area
-        if area > 0:
-            total += area
-            center += new_poly.center_of_gravity * area
-
-    if total < 1:
-        return 0, Vec2(0, 0)
-
-    return total * 1.025, ((center / total) if total > 0 else Vec2(0, 0))
-
+SHIP_CATEGORY = 0b1000
 
 class Ship():
-    def __init__(self, position: Vec2, 
-    texture: pr.Texture2D, 
-    space: pm.Space, 
-    decks: list[tuple[float, float]]
-    ):
-        self.texture = texture
+    texture: pr.Texture2D
+    body: pm.Body
+    humans: list[Human]
+
+    def __init__(self, game_data: dict, position: Vec2, space: pm.Space, decks: list[tuple[float, float]]):
+        self.texture = game_data["textures"]["boat"]
         self.body = pm.Body()
         self.body.position = position
-        hull_size = Vec2(self.texture.width*2, self.texture.height*1.9)
+        hull_size = Vec2(self.texture.width*1.8, self.texture.height*1.9)
         # body_shape = pm.Poly.create_box(self.body, hull_size, 0)
         body_shape = pm.Poly(self.body, [
             (-hull_size.x/2, hull_size.y/2), 
-            (-hull_size.x/2, -hull_size.y*0.5/2),
+            (-hull_size.x/2, -hull_size.y*0.4/2),
             (hull_size.x/2, hull_size.y/2),
-            (hull_size.x/2, -hull_size.y*0.5/2)
+            (hull_size.x/2, -hull_size.y*0.4/2)
         ])
         body_shape.density = 0.001
+        body_shape.friction = 5
+        body_shape.filter = pm.ShapeFilter(group=SHIP_HULL_GROUP, categories=SHIP_CATEGORY)
 
         weight_shape = pm.Poly(self.body, [
             (-hull_size.x/5, hull_size.y*2/8), 
@@ -57,8 +40,18 @@ class Ship():
             (hull_size.x/5, hull_size.y*2/8)
         ])
         weight_shape.density = 0.1
+        weight_shape.filter = pm.ShapeFilter(group=SHIP_HULL_GROUP, categories=SHIP_CATEGORY)
 
         space.add(self.body, body_shape, weight_shape)
+
+        self.humans = []
+        for i in range(random.randint(2, 4)):
+            self.humans.append(
+                Human(game_data, 
+                    Vec2(position.x - hull_size.x/2.2 + random.random() * hull_size.x*0.8, 
+                        position.y - hull_size.y/2), 
+                space)
+            )
     
     def update(self, dt: float):
         # apply drag
@@ -73,8 +66,12 @@ class Ship():
 
         # self.body.velocity = Vec2(0, 0)
         # self.body.angular_velocity = 0
-
+        for human in self.humans:
+            human.update(dt)
+            
     def draw(self, mouse_pos: Vec2):
+        for human in self.humans:
+            human.draw(mouse_pos)
         pr.draw_texture_pro(self.texture, 
             (0, 0, self.texture.width, self.texture.height),
             (self.body.position.x, self.body.position.y, self.texture.width * 2, self.texture.height * 2),

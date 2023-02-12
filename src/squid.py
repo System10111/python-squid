@@ -12,6 +12,7 @@ from pymunk.vec2d import Vec2d as Vec2
 Pose = list[list[float]]
 
 SQUID_SHAPE_GROUP = 1
+SQUID_CATEGORY = 0b100
 N_TENTACLES = 4
 N_TENTACLE_SEGMENTS = 5
 
@@ -58,23 +59,20 @@ class Squid():
     anim_speed = 1.0
     anim_time = 0.0
 
-    def __init__(self, position: Vec2, 
-        texture: pr.Texture2D, 
-        tentacle_texture: pr.Texture2D, 
-        ltentacle_texture: pr.Texture2D, 
-        space: pm.Space
-        ):
+    caught: list
+
+    def __init__(self, game_data: dict, position: Vec2, space: pm.Space):
         base_segment_size = Vec2(32, 16)
-        self.body_texture = texture
-        self.tentacle_texture = tentacle_texture
-        self.ltentacle_texture = ltentacle_texture
+        self.body_texture = game_data["textures"]["squid_body"]
+        self.tentacle_texture = game_data["textures"]["squid_tentacle"]
+        self.ltentacle_texture = game_data["textures"]["squid_ltentacle"]
         # create body
         self.body = pm.Body()
         self.body.position = position
         body_shape = pm.Poly.create_box(self.body, base_segment_size, 1.0)
         body_shape.mass = 20.0
         body_shape.friction = 0.1
-        body_shape.filter = pm.ShapeFilter(group=SQUID_SHAPE_GROUP)
+        body_shape.filter = pm.ShapeFilter(group=SQUID_SHAPE_GROUP, categories=SQUID_CATEGORY)
 
         space.add(self.body, body_shape)
 
@@ -88,7 +86,7 @@ class Squid():
             b_shape = pm.Poly.create_box(b_body, (base_segment_size.x * scl, base_segment_size.y), 1.0)
             b_shape.mass = 0.3 * scl
             b_shape.friction = 0.0
-            b_shape.filter = pm.ShapeFilter(group=SQUID_SHAPE_GROUP)
+            b_shape.filter = pm.ShapeFilter(group=SQUID_SHAPE_GROUP, categories=SQUID_CATEGORY)
             b_joint = pm.PivotJoint(last_body, b_body, (0, -base_segment_size.y/2), (0, base_segment_size.y/2))
 
             b_rotary_spring = pm.DampedRotarySpring(last_body, b_body, 0, 20000 * scl, 1500)
@@ -119,7 +117,7 @@ class Squid():
                 t_shape = pm.Poly.create_box(t_body, t_size, 1.0)
                 t_shape.mass = 1.0 - j * 0.15
                 t_shape.friction = 0.1
-                t_shape.filter = pm.ShapeFilter(group=SQUID_SHAPE_GROUP)
+                t_shape.filter = pm.ShapeFilter(group=SQUID_SHAPE_GROUP, categories=SQUID_CATEGORY)
                 t_joint = pm.PivotJoint(last_body, t_body, last_anchor, (0, -t_size.y/2))
                 (angle, strength) = (DEFAULT_POSE[i][j], 5000)
                 
@@ -157,7 +155,7 @@ class Squid():
                 t_shape = pm.Poly.create_box(t_body, t_size, 1.0)
                 t_shape.mass = (0.8 - j * 0.10 if not is_last else 0.8) * 0.75
                 t_shape.friction = 0.05 if not is_last else 30
-                t_shape.filter = pm.ShapeFilter(group=SQUID_SHAPE_GROUP)
+                t_shape.filter = pm.ShapeFilter(group=SQUID_SHAPE_GROUP, categories=SQUID_CATEGORY)
                 t_joint = pm.PivotJoint(last_body, t_body, last_anchor, (0, -t_size.y/2))
                 (angle, strength) = (0, 1000)
 
@@ -226,6 +224,9 @@ class Squid():
         for b in bodies:
             if b.position.y < 0:
                 b.apply_force_at_world_point((0, 10000 * dt * b.mass), b.position)
+
+        # apply angular drag to the squid
+        self.body.angular_velocity *= 1 - dt * 0.5
 
         self.anim_time += dt
 

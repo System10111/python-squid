@@ -1,5 +1,6 @@
-{ "frames": {
-   "Sprite-0001 0.": {
+{ "frames": [
+   {
+    "filename": "guy2 0.aseprite",
     "frame": { "x": 0, "y": 0, "w": 8, "h": 10 },
     "rotated": false,
     "trimmed": false,
@@ -7,7 +8,8 @@
     "sourceSize": { "w": 8, "h": 10 },
     "duration": 100
    },
-   "Sprite-0001 1.": {
+   {
+    "filename": "guy2 1.aseprite",
     "frame": { "x": 8, "y": 0, "w": 8, "h": 10 },
     "rotated": false,
     "trimmed": false,
@@ -15,7 +17,8 @@
     "sourceSize": { "w": 8, "h": 10 },
     "duration": 100
    },
-   "Sprite-0001 2.": {
+   {
+    "filename": "guy2 2.aseprite",
     "frame": { "x": 16, "y": 0, "w": 8, "h": 10 },
     "rotated": false,
     "trimmed": false,
@@ -23,7 +26,8 @@
     "sourceSize": { "w": 8, "h": 10 },
     "duration": 100
    },
-   "Sprite-0001 3.": {
+   {
+    "filename": "guy2 3.aseprite",
     "frame": { "x": 24, "y": 0, "w": 8, "h": 10 },
     "rotated": false,
     "trimmed": false,
@@ -31,26 +35,37 @@
     "sourceSize": { "w": 8, "h": 10 },
     "duration": 100
    },
-   "Sprite-0001 4.": {
+   {
+    "filename": "guy2 4.aseprite",
     "frame": { "x": 32, "y": 0, "w": 8, "h": 10 },
     "rotated": false,
     "trimmed": false,
     "spriteSourceSize": { "x": 0, "y": 0, "w": 8, "h": 10 },
     "sourceSize": { "w": 8, "h": 10 },
     "duration": 100
+   },
+   {
+    "filename": "guy2 5.aseprite",
+    "frame": { "x": 40, "y": 0, "w": 8, "h": 10 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 8, "h": 10 },
+    "sourceSize": { "w": 8, "h": 10 },
+    "duration": 100
    }
- },
+ ],
  "meta": {
   "app": "https://www.aseprite.org/",
   "version": "1.2.40-x64",
   "image": "guy2.png",
   "format": "RGBA8888",
-  "size": { "w": 40, "h": 10 },
+  "size": { "w": 48, "h": 10 },
   "scale": "1",
   "frameTags": [
-   { "name": "neutal", "from": 0, "to": 0, "direction": "forward" },
+   { "name": "neutral", "from": 0, "to": 0, "direction": "forward" },
    { "name": "walk", "from": 1, "to": 2, "direction": "forward" },
-   { "name": "run", "from": 3, "to": 4, "direction": "forward" }
+   { "name": "run", "from": 3, "to": 4, "direction": "forward" },
+   { "name": "dead", "from": 5, "to": 5, "direction": "forward" }
   ],
   "layers": [
    { "name": "Layer 1", "opacity": 255, "blendMode": "normal" }
