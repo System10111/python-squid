@@ -5,9 +5,7 @@ import pyray as pr
 import pymunk as pm
 from pymunk.vec2d import Vec2d as Vec2
 
-FISH_GROUP = 40
-FISH_CATEGORY = 0b100000
-from squid import SQUID_SHAPE_GROUP, SQUID_CATEGORY
+from utils import SQUID_SHAPE_GROUP, SQUID_CATEGORY, FISH_CATEGORY, FISH_GROUP
 
 class Fish():
     texture: pr.Texture2D
@@ -30,6 +28,7 @@ class Fish():
         self.state_time = random.random() * 4 + 2.0
 
         self.body = pm.Body()
+        self.body.game_object = self
         self.body.position = position
         fish_size = Vec2(16*2, 8*2)
         self.human_size = fish_size
@@ -41,6 +40,8 @@ class Fish():
         space.add(self.body, body_shape)
 
     def update(self, dt: float):
+        if self.state == "eaten":
+            return
         # apply drag
         self.body.velocity *= 1-(1 * dt)
         self.body.angle = 0
@@ -59,7 +60,7 @@ class Fish():
         
         # cast a "ray" to check if we see the squid
         sight_range = 50
-        if len(self.body.space.bb_query(
+        if self.body.space is not None and len(self.body.space.bb_query(
             pm.BB(
                 self.body.position.x if self.facing_right else (self.body.position.x - sight_range),
                 self.body.position.y - 1,
@@ -82,6 +83,8 @@ class Fish():
                 self.body.position += Vec2(1, 0).rotated(self.body.angle) * -speed * dt
 
     def draw(self, mpos: Vec2):
+        if self.state == "eaten":
+            return
         anims = self.animation_data["meta"]["frameTags"]
         anim = [a for a in anims if a["name"] == self.cur_animation][0]
         frame_n = anim["from"] + math.floor(self.anim_time)

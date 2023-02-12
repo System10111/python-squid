@@ -3,6 +3,18 @@ import math
 import pymunk as pm
 from pymunk.vec2d import Vec2d as Vec2
 
+HUMAN_GROUP = 30
+HUMAN_CATEGORY = 0b10000
+
+SHIP_HULL_GROUP = 20
+SHIP_CATEGORY = 0b1000
+
+SQUID_SHAPE_GROUP = 1
+SQUID_CATEGORY = 0b100
+
+FISH_GROUP = 40
+FISH_CATEGORY = 0b100000
+
 def calc_boyancy(ship: pm.Body) -> tuple[float, Vec2]:
     # total area under water
     total = 0

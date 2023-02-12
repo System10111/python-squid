@@ -4,6 +4,10 @@ import pyray as pr
 import pymunk as pm
 from pymunk.vec2d import Vec2d as Vec2
 
+from fish import FISH_CATEGORY, FISH_GROUP
+from human import  HUMAN_CATEGORY, HUMAN_GROUP
+from utils import SQUID_CATEGORY, SQUID_SHAPE_GROUP
+
 # a pose is a list of lists of tuples
 # the elements of the outer list are the tentacles
 # the elements of the inner list are the segments of the tentacles
@@ -11,8 +15,6 @@ from pymunk.vec2d import Vec2d as Vec2
 # the second float of the tuple is the strength with which to pull the segment to the angle
 Pose = list[list[float]]
 
-SQUID_SHAPE_GROUP = 1
-SQUID_CATEGORY = 0b100
 N_TENTACLES = 4
 N_TENTACLE_SEGMENTS = 5
 
@@ -69,6 +71,7 @@ class Squid():
         # create body
         self.body = pm.Body()
         self.body.position = position
+        self.caught = [None, None]
         body_shape = pm.Poly.create_box(self.body, base_segment_size, 1.0)
         body_shape.mass = 20.0
         body_shape.friction = 0.1
@@ -228,6 +231,18 @@ class Squid():
         # apply angular drag to the squid
         self.body.angular_velocity *= 1 - dt * 0.5
 
+        # move caught to ends of respective tentacles
+        for i, caught in enumerate(self.caught):
+            if caught is not None:
+                caught.body.position = self.ltentacles[i][-1][0].position
+        
+        # move the ends of the long tentacles with something caught towards the central body - to be eaten
+        for i, tnt in enumerate([lt[-1][0] for lt in self.ltentacles]):
+            if self.caught[i] is not None:
+                force = (self.body.position - tnt.position).normalized() * 500
+                tnt.apply_force_at_world_point(force, tnt.local_to_world((0, 0)))
+
+
         self.anim_time += dt
 
     def draw(self, mpos: Vec2):
@@ -377,6 +392,15 @@ class Squid():
     	# find the distances to the given position from each of the long tentacles' ends
         ldist = (self.ltentacles[0][-1][0].position - pos).length
         rdist = (self.ltentacles[1][-1][0].position - pos).length
+
+        if self.caught[0] is not None:
+            ldist += 999999
+            if self.caught[1] is not None:
+                # both tentacles are occupied, so don't do anything
+                return
+        if self.caught[1] is not None:
+            rdist += 999999
+
         # find the distance from the point to the squid central's axis
         squid_perp = Vec2(1, 0).rotated(self.body.angle)
         axis_dist = (pos - self.body.position).dot(squid_perp)
@@ -388,108 +412,18 @@ class Squid():
         point = closer.local_to_world((0, 0))
         closer.apply_force_at_world_point(force, point)
 
+        # check if the closer tentacle is colliding with a fish or a human
+        catches = self.body.space.bb_query(pm.BB(
+            closer.position.x - 10,
+            closer.position.y - 10,
+            closer.position.x + 10,
+            closer.position.y + 10
+        ), pm.ShapeFilter(categories=FISH_CATEGORY | HUMAN_CATEGORY, mask=FISH_CATEGORY | HUMAN_CATEGORY))
+
+        if len(catches) > 0:
+            self.caught[0 if ldist < rdist else 1] = catches[0]
+            if catches[0].body.space is not None:
+                self.body.space.remove(catches[0].body)
+
         # apply equal and opposite force to the squid's body to prevent it from moving
         # self.body.apply_force_at_world_point(-force, point)
-
-
-
-
-    
-
-# def swim_anim(time: float, dt: float) -> tuple[Pose, list[Callable]]:
-#     """Swim animation"""
-#     # loop every 4 seconds
-#     time = time % 4.0
-
-#     # the animation is divided into 4 parts:
-#     # 1. Curl tentacles
-#     # ,-S-,
-#     # '- -'
-#     # 2. Expand tentacles to the side
-#     # ---S---
-#     # 3. Push off
-#     #   S
-#     #  | |
-#     #  | |
-#     # 4. Stay like this, while traveling forwards
-
-#     # 1. Curl tentacles
-#     if time < 1.2:
-#         return [
-#             [
-#                 (-time*1.6, 300000), 
-#                 (time*1.2, 300000), 
-#                 (time*1.3, 200000), 
-#                 (time*0.9, 100000), (0, 30000)
-#             ],
-#             [
-#                 (-time*1.5, 300000), 
-#                 (time*1.1, 300000), 
-#                 (time*1.2, 200000), 
-#                 (time*0.8, 100000), (0, 30000)
-#             ],
-#             [
-#                 (time*1.5, 300000), 
-#                 (-time*1.1, 300000), 
-#                 (-time*1.2, 200000), 
-#                 (-time*0.8, 100000), (0, 30000)
-#             ],
-#             [
-#                 (time*1.6, 300000), 
-#                 (-time*1.2, 300000), 
-#                 (-time*1.3, 200000), 
-#                 (-time*0.9, 100000), (0, 30000)
-#             ],
-#         ], []
-#     # 2. Expand tentacles to the side
-#     elif time < 2.2:
-#         return [
-#             [
-#                 (-1.2*1.6, 400000), 
-#                 (0, 200000), (0, 20000), (0, 10000), (0, 30000)
-#             ],
-#             [
-#                 (-1.2*1.5, 400000), 
-#                 (0, 200000), (0, 20000), (0, 10000), (0, 30000)
-#             ],
-#             [
-#                 (1.2*1.5, 400000), 
-#                 (0, 200000), (0, 20000), (0, 10000), (0, 30000)
-#             ],
-#             [
-#                 (1.2*1.6, 400000), 
-#                 (0, 200000), (0, 20000), (0, 10000), (0, 30000)
-#             ],
-#         ], []
-#     # 3. Push off
-#     elif time < 2.7:
-#         events = [] 
-#         if time < 2.4 and time+dt >= 2.4:
-#             events.append(lambda squid: squid.body.apply_impulse_at_local_point((0, -750)))
-        
-#         return [
-#             [
-#                 (0, 200000), 
-#                 (0, 200000), (0, 100000), (0, 100000), (0, 100000)
-#             ],
-#             [
-#                 (0, 200000), 
-#                 (0, 200000), (0, 100000), (0, 100000), (0, 100000)
-#             ],
-#             [
-#                 (0, 200000), 
-#                 (0, 200000), (0, 100000), (0, 100000), (0, 100000)
-#             ],
-#             [
-#                 (0, 200000), 
-#                 (0, 200000), (0, 100000), (0, 100000), (0, 100000)
-#             ],
-#         ], events
-#     # 4. Stay like this, while traveling forwards
-#     else:
-#         return [
-#             [
-#                 (0, 5000000), 
-#                 (0, 1300000), (0, 1000000), (0, 7000000), (0, 500000)
-#             ] for _ in range(4)
-#         ], []

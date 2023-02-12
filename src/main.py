@@ -145,6 +145,11 @@ def main():
     fish_spawn_cooldown = 0.0
     fish_spawn_cooldown_max = 2.0
 
+    blood_particles = []
+    point_particles = []
+
+    point_total = 0
+
     # Run the game loop
     while not pr.window_should_close():
         dt = pr.get_frame_time()
@@ -316,7 +321,19 @@ def main():
                         game_objects.append(fish)
                         fish_spawn_cooldown = fish_spawn_cooldown_max
                     
-
+        # Check if the squid is eating something
+        for i, tnt in enumerate([lt[-1][0] for lt in squid.ltentacles]):
+            if squid.caught[i] is not None:
+                if (squid.caught[i].body.position - squid.body.position).length < 10:
+                    squid.caught[i].body.game_object.state = "eaten"
+                    # append between 3 and 5 blood particles with random velocity
+                    for _ in range(random.randint(3, 5)):
+                        vel = Vec2(random.random() * 2 - 1, random.random() * 2 - 1) * 10
+                        blood_particles.append((tnt.position, vel, random.random() * 0.3 + 0.5))
+                        points = 50 if isinstance(squid.caught[i].body.game_object, Fish) else 100
+                        point_particles.append((tnt.position - Vec2(0, 20), points, random.random() * 0.1 + 0.5))
+                        point_total += points
+                    squid.caught[i] = None
 
         if not pr.is_mouse_button_down(pr.MOUSE_LEFT_BUTTON) and pr.is_mouse_button_down(pr.MOUSE_RIGHT_BUTTON):
             squid.reach(mouse_pos)
@@ -353,6 +370,21 @@ def main():
                 pr.WHITE
             )
 
+        # draw blood particles as 4x4 squares
+        for i, bp in enumerate(blood_particles):
+            pr.draw_rectangle(int(bp[0].x), int(bp[0].y), 4, 4, pr.RED)
+            blood_particles[i] = (bp[0] + bp[1] * dt, bp[1] * (1-dt) + Vec2(0, 10 * dt), bp[2] - dt)
+            if blood_particles[i][2] <= 0:
+                blood_particles.pop(i)
+        
+        # draw point particles as text
+        for i, pp in enumerate(point_particles):
+            pr.draw_text(str(pp[1]), int(pp[0].x), int(pp[0].y), 21, pr.BLACK)
+            pr.draw_text(str(pp[1]), int(pp[0].x), int(pp[0].y), 20, pr.WHITE)
+            point_particles[i] = (pp[0] + Vec2(0, 50 * dt), pp[1], pp[2] - dt)
+            if point_particles[i][2] <= 0:
+                point_particles.pop(i)
+
         if debug_options["draw_collision"]:
             space.debug_draw(draw_options)
 
@@ -368,6 +400,7 @@ def main():
         pr.draw_rectangle(100, 50, 200, 10, pr.GRAY)
         pr.draw_rectangle(102, 52, int(push_buildup/MAX_PUSH_BUILDUP*96 + 0.5), 6, pr.WHITE)
         pr.draw_text("%.3f" % round(squid.body.velocity.length/3, 3) + " km/h", 100, 30, 10, pr.WHITE)
+        pr.draw_text("Points: " + str(point_total), 100, 10, 10, pr.WHITE)
 
         pr.end_mode_2d()
         pr.end_drawing()

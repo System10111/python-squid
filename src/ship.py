@@ -7,10 +7,8 @@ from pymunk.vec2d import Vec2d as Vec2
 
 from human import Human
 
-from utils import calc_boyancy
+from utils import calc_boyancy, SHIP_CATEGORY, SHIP_HULL_GROUP
 
-SHIP_HULL_GROUP = 20
-SHIP_CATEGORY = 0b1000
 
 class Ship():
     texture: pr.Texture2D

@@ -5,10 +5,7 @@ import pyray as pr
 import pymunk as pm
 from pymunk.vec2d import Vec2d as Vec2
 
-HUMAN_GROUP = 30
-HUMAN_CATEGORY = 0b10000
-from squid import SQUID_SHAPE_GROUP, SQUID_CATEGORY
-from utils import calc_boyancy
+from utils import calc_boyancy, SQUID_SHAPE_GROUP, SQUID_CATEGORY, HUMAN_GROUP, HUMAN_CATEGORY
 
 # sometimes the humans spaz out and turn around too quickly - this is a hard fix to prevent that
 turnaround_cooldown = 0.5
@@ -40,6 +37,7 @@ class Human():
         self.breath = max_breath
 
         self.body = pm.Body()
+        self.body.game_object = self
         self.body.position = position
         human_size = Vec2(5*2, 8*2)
         self.human_size = human_size
@@ -51,6 +49,8 @@ class Human():
         space.add(self.body, body_shape)
 
     def update(self, dt: float):
+        if self.state == "eaten":
+            return
         # apply drag
         self.body.velocity *= 1-(1 * dt)
         self.body.angular_velocity *= 1-(3 * dt)
@@ -75,19 +75,19 @@ class Human():
             return
 
         # check at two points if we're on the ground
-        landed_left = len(self.body.space.bb_query(
+        landed_left = (len(self.body.space.bb_query(
                     pm.BB(self.body.position.x + self.human_size.x/2 - 1, 
                         self.body.position.y + self.human_size.y/2 - 1, 
                         self.body.position.x + self.human_size.x/2 + 1, 
                         self.body.position.y + self.human_size.y/2 + 1
-                    ), shape_filter=pm.ShapeFilter(group=HUMAN_GROUP))) > 0
+                    ), shape_filter=pm.ShapeFilter(group=HUMAN_GROUP))) > 0) if self.body.space else False
 
-        landed_right = len(self.body.space.bb_query(
+        landed_right = (len(self.body.space.bb_query(
                     pm.BB(self.body.position.x - self.human_size.x/2 - 1, 
                         self.body.position.y + self.human_size.y/2 - 1, 
                         self.body.position.x - self.human_size.x/2 + 1, 
                         self.body.position.y + self.human_size.y/2 + 1
-                    ), shape_filter=pm.ShapeFilter(group=HUMAN_GROUP))) > 0
+                    ), shape_filter=pm.ShapeFilter(group=HUMAN_GROUP))) > 0) if self.body.space else False
 
         self.turnaround_time -= dt
         self.anim_time += dt * 5
@@ -106,7 +106,7 @@ class Human():
         
         # cast a "ray" to check if we see the squid
         sight_range = 50
-        if len(self.body.space.bb_query(
+        if self.body.space is not None and len(self.body.space.bb_query(
             pm.BB(
                 self.body.position.x if self.facing_right else (self.body.position.x - sight_range),
                 self.body.position.y - 1,
@@ -155,9 +155,13 @@ class Human():
                         self.state_time = 0
 
     def draw(self, mpos: Vec2):
+        if self.state == "eaten":
+            return
         anims = self.animation_data["meta"]["frameTags"]
         anim = [a for a in anims if a["name"] == self.cur_animation][0]
         frame_n = anim["from"] + math.floor(self.anim_time)
+        if frame_n > anim["to"] - anim["from"] + 1:
+            frame_n = anim["to"] - anim["from"]
         frame_data = self.animation_data["frames"][frame_n]
         wdt = frame_data["frame"]["w"]
         hgt = frame_data["frame"]["h"]
