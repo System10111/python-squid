@@ -8,6 +8,7 @@ from pymunk.vec2d import Vec2d as Vec2
 
 from squid import Squid, DEFAULT_POSE, PRE_PUSH_POSE, BALANCE_POSE
 
+from ship import Ship
 
 class RLDrawOptions(pm.SpaceDebugDrawOptions):
     """ A class that implements the pymunk debug draw options interface for pyray """
@@ -70,12 +71,12 @@ def main():
 
     # Load textures
     guy1 = pr.load_texture(os.path.join("res", "guy1.png"))
+    boat_texture = pr.load_texture(os.path.join("res", "boat.png"))
 
     # Create a camera
     camera = pr.Camera2D((0, 0), (0, 0), 0, 1)
     camera.offset = window_size / 2
     camera.zoom = 2.5
-    camera.target = Vec2(300, 300)
 
     # Setup physics
     draw_options = RLDrawOptions()
@@ -85,7 +86,7 @@ def main():
     # space.damping = 0.01
     
     # Create the squid
-    squid = Squid(Vec2(300, 300), 
+    squid = Squid(Vec2(300, 100), 
         pr.load_texture(os.path.join("res", "squid-body.png")), 
         pr.load_texture(os.path.join("res", "squid-tentacle.png")),
         pr.load_texture(os.path.join("res", "squid-ltentacle.png")),
@@ -104,6 +105,10 @@ def main():
     push_buildup = 0.0
     MAX_PUSH_BUILDUP = 1.0
     good_push = False
+
+    game_objects = [squid]
+
+    game_objects.append(Ship(squid.body.position + Vec2(30, -100), boat_texture, space, []))
 
     # Run the game loop
     while not pr.window_should_close():
@@ -141,8 +146,10 @@ def main():
                 walls[-1][2] = mouse_pos.x
                 walls[-1][3] = mouse_pos.y
 
+        in_water = squid.body.position.y > 0
+
         # Squid movement
-        if True: # movement enabled
+        if True: # Movement enabled
             turn_speed = 1.5
             max_speed = 350
 
@@ -156,24 +163,24 @@ def main():
 
             scl_angle_diff = min(abs(angle_diff)*10, 1) * (angle_diff / abs(angle_diff))
 
+            if in_water:
+                # turn_speed *= 1 - 0.6 * min(vel_len / 100, 1)
+                
+                # slow down the squid in the direction perpendicular to its facing
+                perp = Vec2(-squid_dir.y, squid_dir.x)
+                squid.body.velocity -= perp * squid.body.velocity.dot(perp) * dt * 5
 
-            turn_speed *= 1 - 0.6 * (min(vel_len / 125, 1))
-            
-            # slow down the squid in the direction perpendicular to its facing
-            perp = Vec2(-squid_dir.y, squid_dir.x)
-            squid.body.velocity -= perp * squid.body.velocity.dot(perp) * dt * 5
+                squid.body.velocity *= 1 - dt*0.2*math.sqrt(max(vel_len, 10)/200)
 
-            squid.body.velocity *= 1 - dt*0.2*math.sqrt(max(vel_len, 10)/200)
+                # slow down the spin if we are close to the mouse and moving quickly
+                squid.body.angular_velocity *= 1 - max(0.8 - (angle_diff*angle_diff)/2*2, 0)*dt*3 * min(vel_len/50, 1)
 
-            # slow down the spin if we are close to the mouse and moving quickly
-            squid.body.angular_velocity *= 1 - max(0.8 - (angle_diff*angle_diff)/2*2, 0)*dt*3 * min(vel_len/50, 1)
+                # if we're moving quickly, there'll be an aerodynamic correction force, 
+                # which will try too keep us facing the direction of movement
+                ang_err = -vel_dir.get_angle_between(-squid_dir)
+                squid.body.angular_velocity += ang_err * dt * 15 * min(vel_len/100, 1)
 
-            # if we're moving quickly, there'll be an aerodynamic correction force, 
-            # which will try too keep us facing the direction of movement
-            ang_err = -vel_dir.get_angle_between(-squid_dir)
-            squid.body.angular_velocity += ang_err * dt * 15 * min(vel_len/100, 1)
-
-            squid.body.angular_velocity *= 1-dt*5
+                squid.body.angular_velocity *= 1-dt*5
 
             if pr.is_mouse_button_down(pr.MOUSE_LEFT_BUTTON):
                 if good_push:
@@ -186,7 +193,7 @@ def main():
                     squid.body.angular_velocity *= 1-(dt*5)
 
                 if pr.is_mouse_button_down(pr.MOUSE_RIGHT_BUTTON):
-                    turn_speed *= 9.0
+                    turn_speed *= 12.0
                     squid.set_pose(BALANCE_POSE)
                 
                 squid.body.angular_velocity += turn_speed * scl_angle_diff/50
@@ -228,6 +235,8 @@ def main():
                     
                     
                 else:
+                    # neutral
+                    squid.body.angular_velocity *= 1-(dt*0.5)
                     push_buildup = max(push_buildup - dt, 0.0)
                     good_push = False            
                     squid.set_pose(DEFAULT_POSE)
@@ -239,13 +248,14 @@ def main():
         # Update the physics
         space.step(dt)
 
-        # Update the squid
-        squid.update(dt)
+        # Update the game objects
+        for obj in game_objects:
+            obj.update(dt)
         camera.target = squid.body.position
 
         ### DRAWING ###
         pr.begin_drawing()
-        pr.clear_background(pr.DARKBLUE)
+        pr.clear_background(pr.SKYBLUE)
         pr.begin_mode_2d(camera)
 
         # Draw the level
@@ -255,9 +265,10 @@ def main():
         # draw only about 20 of them centered around the squid, so we don't draw too many
         # and slow down the game
         for x in range(int(squid.body.position.x/100) - 10, int(squid.body.position.x/100) + 10):
-            pr.draw_texture(guy1, x*100, 0, pr.WHITE)
+            pr.draw_texture_ex(guy1, (x*100, 0), 0, 2, pr.WHITE)
 
-        squid.draw(mpos=mouse_pos)
+        for obj in game_objects:
+            obj.draw(mouse_pos)
 
         if debug_options["draw_collision"]:
             space.debug_draw(draw_options)
@@ -277,6 +288,7 @@ def main():
     # Close the window
     pr.unload_texture(squid.body_texture)
     pr.unload_texture(squid.tentacle_texture)
+    pr.unload_texture(squid.ltentacle_texture)
     pr.close_window()
 
 if __name__ == "__main__":

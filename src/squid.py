@@ -1,4 +1,3 @@
-from typing import Callable
 import math
 
 import pyray as pr
@@ -11,13 +10,6 @@ from pymunk.vec2d import Vec2d as Vec2
 # the first float of the tuple is the angle of the segment
 # the second float of the tuple is the strength with which to pull the segment to the angle
 Pose = list[list[float]]
-
-"""
-    Since the tentacles are made using physics objects, representing the animation as a function
-    allows defining it in an easier way algorithmically, rather than through manually created keyframes.
-    This also allows the animation to decide algorithmically what happens after it's defined time.
-"""
-Animation = Callable[[float, float], tuple[Pose, list[Callable]]]
 
 SQUID_SHAPE_GROUP = 1
 N_TENTACLES = 4
@@ -101,7 +93,10 @@ class Squid():
 
             b_rotary_spring = pm.DampedRotarySpring(last_body, b_body, 0, 20000 * scl, 1500)
 
-            b_rotary_limit = pm.RotaryLimitJoint(last_body, b_body, -9, 9)
+            b_rotary_limit = pm.RotaryLimitJoint(last_body, b_body, 
+            -9 if i > 1 else -0.5, 
+            9 if i > 1 else 0.5
+            )
 
             last_body = b_body
             space.add(b_body, b_shape, b_joint, b_rotary_spring, b_rotary_limit)
@@ -161,7 +156,7 @@ class Squid():
                 t_body.position = last_body.position + last_anchor + Vec2(0, t_size.y/2)
                 t_shape = pm.Poly.create_box(t_body, t_size, 1.0)
                 t_shape.mass = (0.8 - j * 0.10 if not is_last else 0.8) * 0.75
-                t_shape.friction = 0.05 if not is_last else 0.5
+                t_shape.friction = 0.05 if not is_last else 30
                 t_shape.filter = pm.ShapeFilter(group=SQUID_SHAPE_GROUP)
                 t_joint = pm.PivotJoint(last_body, t_body, last_anchor, (0, -t_size.y/2))
                 (angle, strength) = (0, 1000)
@@ -221,6 +216,17 @@ class Squid():
                     t_body.angle -= 2 * math.pi
             tentacle[-1][0].velocity *= 1-dt
 
+
+        bodies = [self.body] + \
+                [s[0] for s in self.body_segments] + \
+                [t[0] for sublist in self.tentacles for t in sublist] + \
+                [t[0] for sublist in self.ltentacles for t in sublist]
+        
+        # apply a force to the squid if it is above the water
+        for b in bodies:
+            if b.position.y < 0:
+                b.apply_force_at_world_point((0, 10000 * dt * b.mass), b.position)
+
         self.anim_time += dt
 
     def draw(self, mpos: Vec2):
@@ -234,7 +240,7 @@ class Squid():
                 self.body_texture.width*2, 
                 self.body_texture.height*2/4),
             (self.body_texture.width*2/2, self.body_texture.height*2/4/2),
-            self.body.angle * 180 / 3.14159,
+            self.body.angle * 180 / math.pi,
             pr.WHITE
         )
 
@@ -246,7 +252,7 @@ class Squid():
             pr.draw_rectangle_pro(
                 (eye_center.x, eye_center.y, 4, 4),
                 (2, 2),
-                self.body.angle * 180 / 3.14159,
+                self.body.angle * 180 / math.pi,
                 pr.BLACK
             )
 
@@ -261,7 +267,7 @@ class Squid():
                     self.body_texture.width*2, 
                     self.body_texture.height*2/4),
                 (self.body_texture.width*2/2, self.body_texture.height*2/4/2),
-                seg_body.angle * 180 / 3.14159,
+                seg_body.angle * 180 / math.pi,
                 pr.WHITE
             )
 
@@ -279,7 +285,7 @@ class Squid():
                             self.ltentacle_texture.width*2, 
                             (self.ltentacle_texture.height-8)*2 / (len(tentacle)-1)),
                         (self.ltentacle_texture.width*2/2, (self.ltentacle_texture.height-8)*2/(len(tentacle)-1)/2),
-                        t_body.angle * 180 / 3.14159,
+                        t_body.angle * 180 / math.pi,
                         pr.WHITE
                     )
                 else: # draw the "hand"
@@ -293,7 +299,7 @@ class Squid():
                             self.ltentacle_texture.width*2, 
                             16),
                         (self.ltentacle_texture.width*2/2, 16/2),
-                        t_body.angle * 180 / 3.14159,
+                        t_body.angle * 180 / math.pi,
                         pr.WHITE
                     )
                 
@@ -313,7 +319,7 @@ class Squid():
                         self.tentacle_texture.width*2, 
                         self.tentacle_texture.height*2 / len(tentacle)),
                     (self.tentacle_texture.width*2/2, self.tentacle_texture.height*2/len(tentacle)/2),
-                    t_body.angle * 180 / 3.14159,
+                    t_body.angle * 180 / math.pi,
                     pr.WHITE
                 )
 
@@ -377,7 +383,7 @@ class Squid():
         ldist *= (1/(1+math.pow(math.e, -axis_dist/100))) + 0.5
 
         closer = self.ltentacles[0 if ldist < rdist else 1][-1][0]
-        force = (pos - closer.position).normalized() * 300
+        force = (pos - closer.position).normalized() * 500
         point = closer.local_to_world((0, 0))
         closer.apply_force_at_world_point(force, point)
 
