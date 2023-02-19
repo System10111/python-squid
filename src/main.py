@@ -63,10 +63,10 @@ def load_walls(file: str) -> list[float]:
 def main():
     window_size = Vec2(1280, 720)
 
+
     # Create a window with a size of 1280x720 pixels
     pr.init_window(int(window_size.x), int(window_size.y), "Squid")
     pr.set_target_fps(60)
- 
 
     debug_options = {
         "draw_collision": False,
@@ -75,6 +75,8 @@ def main():
 
     game_data = {
         "textures" : {
+            "main_menu_bg": pr.load_texture(os.path.join("res", "menu.png")),
+            "controls_screen": pr.load_texture(os.path.join("res", "controls.png")),
             "level": pr.load_texture(os.path.join("res", "level.png")),
             "squid_body": pr.load_texture(os.path.join("res", "squid-body.png")),
             "squid_tentacle": pr.load_texture(os.path.join("res", "squid-tentacle.png")),
@@ -91,6 +93,14 @@ def main():
             "fish": json.load(open(os.path.join("res", "fish.json"), "r")),
         }
     }
+
+    main_menu = True
+    controls_screen = False
+    # load the high score from "high_score.txt" if it exists
+    high_score = 0
+    if os.path.exists("high_score.txt"):
+        with open("high_score.txt", "r") as f:
+            high_score = int(f.read())
 
     level_rect = (0, -380, game_data["textures"]["level"].width, game_data["textures"]["level"].height)
 
@@ -156,23 +166,58 @@ def main():
 
         mouse_pos = pr.get_screen_to_world_2d(pr.get_mouse_position(), camera)
         mouse_pos = Vec2(mouse_pos.x, mouse_pos.y)
-        ### UPDATE ###
 
+        ### MAIN MENU ###
+        if main_menu > 0:
+            pr.begin_drawing()
+            pr.clear_background(pr.RAYWHITE)
+            # draw the main menu texture, but fit it in the window
+            pr.draw_texture_pro(game_data["textures"]["main_menu_bg"], 
+                (0, 0, game_data["textures"]["main_menu_bg"].width, game_data["textures"]["main_menu_bg"].height), 
+                (0, 0, pr.get_screen_width(), pr.get_screen_height()), (0, 0), 0, pr.WHITE)
+            pr.draw_text("Click to Start", int(pr.get_screen_width() / 2) - 200, 50, 40, pr.WHITE)
+            pr.draw_text("High Score: " + str(high_score), int(pr.get_screen_width() / 2) - 200, 100, 40, pr.WHITE)
+            if controls_screen:
+                pr.draw_texture_pro(game_data["textures"]["controls_screen"], 
+                    (0, 0, game_data["textures"]["controls_screen"].width, game_data["textures"]["controls_screen"].height), 
+                    (0, 0, pr.get_screen_width(), pr.get_screen_height()), (0, 0), 0, pr.WHITE)
+
+            pr.end_drawing()
+
+            if pr.is_mouse_button_pressed(pr.MOUSE_LEFT_BUTTON) or pr.is_mouse_button_pressed(pr.MOUSE_RIGHT_BUTTON):
+                if controls_screen:
+                    controls_screen = False
+                    main_menu = False
+                else:
+                    controls_screen = True
+
+
+            # skip the rest of the update loop
+            continue
+
+
+        ### UPDATE ###
         for i in range(0, len(water_tiles)):
             if random.random() < 0.01:
                 water_tiles[i] += 1
                 if water_tiles[i] >= 3:
                     water_tiles[i] = 0
 
-        # Update the camera
+        if pr.is_key_pressed(pr.KEY_ESCAPE):
+            main_menu = True
+            controls_screen = False
+            high_score = max(point_total, high_score)
+
+        if pr.is_key_pressed(pr.KEY_H):
+            controls_screen = not controls_screen
+
         if pr.is_key_pressed(pr.KEY_F1):
             debug_options["draw_collision"] = not debug_options["draw_collision"]
 
         if pr.is_key_pressed(pr.KEY_F2):
             debug_options["wall_placement"] = not debug_options["wall_placement"]
 
-        if pr.is_key_down(pr.KEY_T):
-            squid.body.apply_force_at_local_point((0, 1000), (0, 0))
+
 
         # adding walls
         if debug_options["wall_placement"]:
@@ -206,147 +251,168 @@ def main():
 
         in_water = squid.body.position.y > 0
 
-        # Squid movement
-        if True: # Movement enabled
-            turn_speed = 1.5
-            max_speed = 350
+        # skip to the drawing step if we're on the controls screen
+        if not controls_screen:
+            # Squid movement
+            if True: # Movement enabled
+                turn_speed = 1.5
+                max_speed = 350
 
-            squid_dir = Vec2(0, 1).rotated(squid.body.angle)
-            mouse_dir = mouse_pos - squid.body.position
-            mouse_dir = Vec2(mouse_dir.x, mouse_dir.y).normalized()
-            angle_diff = -mouse_dir.get_angle_between(-squid_dir)
-            mouse_dist = mouse_pos.get_distance(squid.body.position)
-            vel_len = squid.body.velocity.length
-            vel_dir = Vec2(squid.body.velocity.x, squid.body.velocity.y).normalized()
+                squid_dir = Vec2(0, 1).rotated(squid.body.angle)
+                mouse_dir = mouse_pos - squid.body.position
+                mouse_dir = Vec2(mouse_dir.x, mouse_dir.y).normalized()
+                angle_diff = -mouse_dir.get_angle_between(-squid_dir)
+                mouse_dist = mouse_pos.get_distance(squid.body.position)
+                vel_len = squid.body.velocity.length
+                vel_dir = Vec2(squid.body.velocity.x, squid.body.velocity.y).normalized()
 
-            scl_angle_diff = (min(abs(angle_diff)*10, 1) * (angle_diff / abs(angle_diff))) if angle_diff != 0 else 0
+                scl_angle_diff = (min(abs(angle_diff)*10, 1) * (angle_diff / abs(angle_diff))) if angle_diff != 0 else 0
 
-            if in_water:
-                # turn_speed *= 1 - 0.6 * min(vel_len / 100, 1)
-                
-                # slow down the squid in the direction perpendicular to its facing
-                perp = Vec2(-squid_dir.y, squid_dir.x)
-                squid.body.velocity -= perp * squid.body.velocity.dot(perp) * dt * 5
+                if in_water:
+                    # turn_speed *= 1 - 0.6 * min(vel_len / 100, 1)
+                    
+                    # slow down the squid in the direction perpendicular to its facing
+                    perp = Vec2(-squid_dir.y, squid_dir.x)
+                    squid.body.velocity -= perp * squid.body.velocity.dot(perp) * dt * 5
 
-                squid.body.velocity *= 1 - dt*0.2*math.sqrt(max(vel_len, 10)/200)
+                    squid.body.velocity *= 1 - dt*0.2*math.sqrt(max(vel_len, 10)/200)
 
-                # slow down the spin if we are close to the mouse and moving quickly
-                squid.body.angular_velocity *= 1 - max(0.8 - (angle_diff*angle_diff)/2*2, 0)*dt*3 * min(vel_len/50, 1)
+                    # slow down the spin if we are close to the mouse and moving quickly
+                    squid.body.angular_velocity *= 1 - max(0.8 - (angle_diff*angle_diff)/2*2, 0)*dt*3 * min(vel_len/50, 1)
 
-                # if we're moving quickly, there'll be an aerodynamic correction force, 
-                # which will try too keep us facing the direction of movement
-                ang_err = -vel_dir.get_angle_between(-squid_dir)
-                squid.body.angular_velocity += ang_err * dt * 15 * min(vel_len/100, 1)
+                    # if we're moving quickly, there'll be an aerodynamic correction force, 
+                    # which will try too keep us facing the direction of movement
+                    ang_err = -vel_dir.get_angle_between(-squid_dir)
+                    squid.body.angular_velocity += ang_err * dt * 15 * min(vel_len/100, 1)
 
-                squid.body.angular_velocity *= 1-dt*5
+                    squid.body.angular_velocity *= 1-dt*5
 
-            if pr.is_mouse_button_down(pr.MOUSE_LEFT_BUTTON):
-                if good_push:
-                    good_push = False
-                    push_buildup = min(push_buildup, MAX_PUSH_BUILDUP/4)
-                squid.set_pose(PRE_PUSH_POSE)
-                push_buildup = min(push_buildup + dt/2, MAX_PUSH_BUILDUP)
-                squid.body.angular_velocity += turn_speed * vel_len * 0.001 * scl_angle_diff
-                if squid.body.angular_velocity * angle_diff < 0: # they have different signs
-                    squid.body.angular_velocity *= 1-(dt*5)
-
-                if pr.is_mouse_button_down(pr.MOUSE_RIGHT_BUTTON):
-                    turn_speed *= 12.0
-                    squid.set_pose(BALANCE_POSE)
-                
-                squid.body.angular_velocity += turn_speed * scl_angle_diff/50
-                # slow down the squid if it is moving backwards relative to its body
-                if squid_dir.dot(vel_dir) > 0.2:
-                    squid.body.velocity *= 0.9
-        
-            else:
-                # if we bulid enough push, we do a 'good push'
-                if not good_push and push_buildup > 0.1:
-                    # add more push the more the squid's tantacles are facing away from the center
-                    push_buildup += squid.get_spread() * 0.08
-                    good_push = True
-                    if pr.is_mouse_button_down(pr.MOUSE_RIGHT_BUTTON):
-                        # we can prevent the push by holding the right mouse button
-                        push_buildup = 0.0
+                if pr.is_mouse_button_down(pr.MOUSE_LEFT_BUTTON):
+                    if good_push:
                         good_push = False
-                        # since this also acts as a break, we also slow down the squid
-                        squid.body.velocity *= 0.75
-                        squid.body.angular_velocity *= 0.75
-
-
-                # good push - push the squid in the direction it is facing while adding
-                # angular velocity to the squid to make it look at the mouse
-                if good_push:
-                    push_buildup = max(push_buildup - dt * max(vel_len/(0.5*max_speed), 1) / 2, 0.0)
-                    # apply angular velocity to the squid
-                    squid.body.angular_velocity += turn_speed * scl_angle_diff * push_buildup / 30
+                        push_buildup = min(push_buildup, MAX_PUSH_BUILDUP/4)
+                    squid.set_pose(PRE_PUSH_POSE)
+                    push_buildup = min(push_buildup + dt/2, MAX_PUSH_BUILDUP)
+                    squid.body.angular_velocity += turn_speed * vel_len * 0.001 * scl_angle_diff
                     if squid.body.angular_velocity * angle_diff < 0: # they have different signs
-                        squid.body.angular_velocity *= 1-(dt*20)
-                    squid.set_pose(DEFAULT_POSE)
-                    # apply force to the squid
-                    force = push_buildup * 2000 * min(mouse_dist / 50.0, 1.0) * (1 - (min(vel_len/max_speed, 1)))
-                    squid.body_tip.apply_force_at_local_point(Vec2(0, -1) * force, (0, -50))
-                    # squid.body.velocity += -squid_dir * push_buildup * 100 * min(mouse_dist, 50.0) / 50.0 * dt
+                        squid.body.angular_velocity *= 1-(dt*5)
+
+                    if pr.is_mouse_button_down(pr.MOUSE_RIGHT_BUTTON):
+                        turn_speed *= 12.0
+                        squid.set_pose(BALANCE_POSE)
                     
-                    if push_buildup == 0.0:
-                        good_push = False
-                    
-                    
+                    squid.body.angular_velocity += turn_speed * scl_angle_diff/50
+                    # slow down the squid if it is moving backwards relative to its body
+                    if squid_dir.dot(vel_dir) > 0.2:
+                        squid.body.velocity *= 0.9
+            
                 else:
-                    # neutral
-                    squid.body.angular_velocity *= 1-(dt*0.5)
-                    push_buildup = max(push_buildup - dt, 0.0)
-                    good_push = False            
-                    squid.set_pose(DEFAULT_POSE)
+                    # if we bulid enough push, we do a 'good push'
+                    if not good_push and push_buildup > 0.1:
+                        # add more push the more the squid's tantacles are facing away from the center
+                        push_buildup += squid.get_spread() * 0.08
+                        good_push = True
+                        if pr.is_mouse_button_down(pr.MOUSE_RIGHT_BUTTON):
+                            # we can prevent the push by holding the right mouse button
+                            push_buildup = 0.0
+                            good_push = False
+                            # since this also acts as a break, we also slow down the squid
+                            squid.body.velocity *= 0.75
+                            squid.body.angular_velocity *= 0.75
 
-            fish_spawn_cooldown -= dt
 
-            if vel_len > 10:
-                # spawn some fish
-                if (random.random() < 0.01 and fish_spawn_cooldown <= 0.0) or pr.is_key_pressed(pr.KEY_F5):
-                    
-                    spawn_pos = squid.body.position + (vel_dir * (random.random() * 300 + 300)).rotated(random.random() * 0.5 - 0.25)
-                    # check that the fish is not spawning inside a wall,
-                    # above the water, or near a lot of other fish
-                    in_level = spawn_pos.x > level_rect[0] and \
-                        spawn_pos.x < level_rect[0] + level_rect[2] and \
-                        spawn_pos.y > level_rect[1] and \
-                        spawn_pos.y < level_rect[1] + level_rect[3]
-                    if in_level and \
-                       not space.bb_query(pm.BB(spawn_pos.x-10, spawn_pos.y-10, spawn_pos.x+10, spawn_pos.y+10), pm.ShapeFilter()) and\
-                       not spawn_pos.y < 0 and \
-                       not len(space.bb_query(pm.BB(spawn_pos.x-200, spawn_pos.y-200, spawn_pos.x+200, spawn_pos.y+200), 
-                        pm.ShapeFilter(categories=FISH_CATEGORY, mask=FISH_CATEGORY))) > 3:
-                        fish = Fish(game_data, spawn_pos, space)
-                        game_objects.append(fish)
-                        fish_spawn_cooldown = fish_spawn_cooldown_max
-                    
-        # Check if the squid is eating something
-        for i, tnt in enumerate([lt[-1][0] for lt in squid.ltentacles]):
-            if squid.caught[i] is not None:
-                if (squid.caught[i].body.position - squid.body.position).length < 10:
-                    squid.caught[i].body.game_object.state = "eaten"
-                    # append between 3 and 5 blood particles with random velocity
-                    for _ in range(random.randint(3, 5)):
-                        vel = Vec2(random.random() * 2 - 1, random.random() * 2 - 1) * 10
-                        blood_particles.append((tnt.position, vel, random.random() * 0.3 + 0.5))
+                    # good push - push the squid in the direction it is facing while adding
+                    # angular velocity to the squid to make it look at the mouse
+                    if good_push:
+                        push_buildup = max(push_buildup - dt * max(vel_len/(0.5*max_speed), 1) / 2, 0.0)
+                        # apply angular velocity to the squid
+                        squid.body.angular_velocity += turn_speed * scl_angle_diff * push_buildup / 30
+                        if squid.body.angular_velocity * angle_diff < 0: # they have different signs
+                            squid.body.angular_velocity *= 1-(dt*20)
+                        squid.set_pose(DEFAULT_POSE)
+                        # apply force to the squid
+                        force = push_buildup * 2000 * min(mouse_dist / 50.0, 1.0) * (1 - (min(vel_len/max_speed, 1)))
+                        squid.body_tip.apply_force_at_local_point(Vec2(0, -1) * force, (0, -50))
+                        # squid.body.velocity += -squid_dir * push_buildup * 100 * min(mouse_dist, 50.0) / 50.0 * dt
+                        
+                        if push_buildup == 0.0:
+                            good_push = False
+                        
+                        
+                    else:
+                        # neutral
+                        squid.body.angular_velocity *= 1-(dt*0.5)
+                        push_buildup = max(push_buildup - dt, 0.0)
+                        good_push = False            
+                        squid.set_pose(DEFAULT_POSE)
+
+                fish_spawn_cooldown -= dt
+
+                if vel_len > 10:
+                    # spawn some fish
+                    if (random.random() < 0.01 and fish_spawn_cooldown <= 0.0) or pr.is_key_pressed(pr.KEY_F5):
+                        
+                        spawn_pos = squid.body.position + (vel_dir * (random.random() * 300 + 300)).rotated(random.random() * 0.5 - 0.25)
+                        # check that the fish is not spawning inside a wall,
+                        # above the water, or near a lot of other fish
+                        in_level = spawn_pos.x > level_rect[0] and \
+                            spawn_pos.x < level_rect[0] + level_rect[2] and \
+                            spawn_pos.y > level_rect[1] and \
+                            spawn_pos.y < level_rect[1] + level_rect[3]
+                        if in_level and \
+                        not space.bb_query(pm.BB(spawn_pos.x-10, spawn_pos.y-10, spawn_pos.x+10, spawn_pos.y+10), pm.ShapeFilter()) and\
+                        not spawn_pos.y < 0 and \
+                        not len(space.bb_query(pm.BB(spawn_pos.x-200, spawn_pos.y-200, spawn_pos.x+200, spawn_pos.y+200), 
+                            pm.ShapeFilter(categories=FISH_CATEGORY, mask=FISH_CATEGORY))) > 3:
+                            fish = Fish(game_data, spawn_pos, space)
+                            game_objects.append(fish)
+                            fish_spawn_cooldown = fish_spawn_cooldown_max
+                        
+            # Check if the squid is eating something
+            for i, tnt in enumerate([lt[-1][0] for lt in squid.ltentacles]):
+                if squid.caught[i] is not None:
+                    if squid.caught[i].body.game_object.state == "eaten":
+                        squid.caught[i] = None
+                        continue
+                    if (squid.caught[i].body.position - squid.body.position).length < 14:
+                        squid.caught[i].body.game_object.state = "eaten"
+                        # append between 3 and 5 blood particles with random velocity
+                        for _ in range(random.randint(3, 5)):
+                            vel = Vec2(random.random() * 2 - 1, random.random() * 2 - 1) * 10
+                            blood_particles.append((tnt.position, vel, random.random() * 0.3 + 0.5))
                         points = 50 if isinstance(squid.caught[i].body.game_object, Fish) else 100
                         point_particles.append((tnt.position - Vec2(0, 20), points, random.random() * 0.1 + 0.5))
                         point_total += points
-                    squid.caught[i] = None
+                        if point_total > high_score:
+                            # save the high score to "high_score.txt", create it if it doesn't exist
+                            with open("high_score.txt", "w") as f:
+                                f.write(str(point_total))
+                        squid.caught[i] = None
 
-        if not pr.is_mouse_button_down(pr.MOUSE_LEFT_BUTTON) and pr.is_mouse_button_down(pr.MOUSE_RIGHT_BUTTON):
-            squid.reach(mouse_pos)
+            if not pr.is_mouse_button_down(pr.MOUSE_LEFT_BUTTON) and pr.is_mouse_button_down(pr.MOUSE_RIGHT_BUTTON):
+                squid.reach(mouse_pos)
 
-        # Update the physics
-        space.step(dt)
+            # Update the physics
+            space.step(dt)
 
-        # Update the game objects
-        for obj in game_objects:
-            obj.update(dt)
-        if not debug_options["wall_placement"]:
-            camera.target = squid.body.position
-
+            # Update the game objects
+            for obj in game_objects:
+                obj.update(dt)
+            if not debug_options["wall_placement"]:
+                camera.target = squid.body.position
+                # don't let the camera see outside the level
+                if camera.target.x < level_rect[0] + camera.offset.x/2.5:
+                    camera.target.x = level_rect[0] + camera.offset.x/2.5
+                if camera.target.x > level_rect[0] + level_rect[2] + camera.offset.x/2.5:
+                    camera.target.x = level_rect[0] + level_rect[2] + camera.offset.x/2.5
+                if camera.target.y < level_rect[1] + camera.offset.y/2.5:
+                    camera.target.y = level_rect[1] + camera.offset.y/2.5
+                if camera.target.y > level_rect[1] + level_rect[3] + camera.offset.y/2.5:
+                    camera.target.y = level_rect[1] + level_rect[3] + camera.offset.y/2.5
+        else:
+            # close the controls screen if we press the left mouse button
+            if pr.is_mouse_button_down(pr.MOUSE_LEFT_BUTTON):
+                controls_screen = False
         ### DRAWING ###
         pr.begin_drawing()
         pr.clear_background(pr.SKYBLUE)
@@ -400,7 +466,13 @@ def main():
         pr.draw_rectangle(100, 50, 200, 10, pr.GRAY)
         pr.draw_rectangle(102, 52, int(push_buildup/MAX_PUSH_BUILDUP*96 + 0.5), 6, pr.WHITE)
         pr.draw_text("%.3f" % round(squid.body.velocity.length/3, 3) + " km/h", 100, 30, 10, pr.WHITE)
-        pr.draw_text("Points: " + str(point_total), 100, 10, 10, pr.WHITE)
+        pr.draw_text("Points: " + str(point_total) + (" New High Score!!" if point_total > high_score else ""), 100, 10, 10, pr.WHITE)
+
+        if controls_screen:
+            pr.draw_texture_pro(game_data["textures"]["controls_screen"], 
+                (0, 0, game_data["textures"]["controls_screen"].width, game_data["textures"]["controls_screen"].height), 
+                (0, 0, pr.get_screen_width(), pr.get_screen_height()), (0, 0), 0, pr.WHITE)
+
 
         pr.end_mode_2d()
         pr.end_drawing()

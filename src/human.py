@@ -61,16 +61,6 @@ class Human():
         buo_area, buo_center = calc_boyancy(self.body)
         self.body.apply_force_at_world_point(Vec2(0, -10 * dt * buo_area * (0.1 if self.state == "dead" else 1)), buo_center)
 
-        if self.body.position.y > 5:
-            self.breath -= dt
-            if self.breath <= 0:
-                self.breath = 0
-                self.state = "dead"
-                self.state_time = 99999
-                self.cur_animation = "dead"
-        else:
-            self.breath = min(self.breath + dt, max_breath)
-
         if self.state == "dead":
             return
 
@@ -80,14 +70,25 @@ class Human():
                         self.body.position.y + self.human_size.y/2 - 1, 
                         self.body.position.x + self.human_size.x/2 + 1, 
                         self.body.position.y + self.human_size.y/2 + 1
-                    ), shape_filter=pm.ShapeFilter(group=HUMAN_GROUP))) > 0) if self.body.space else False
+                    ), shape_filter=pm.ShapeFilter(group=HUMAN_GROUP, categories=HUMAN_CATEGORY))) > 0) if self.body.space else False
 
         landed_right = (len(self.body.space.bb_query(
                     pm.BB(self.body.position.x - self.human_size.x/2 - 1, 
                         self.body.position.y + self.human_size.y/2 - 1, 
                         self.body.position.x - self.human_size.x/2 + 1, 
                         self.body.position.y + self.human_size.y/2 + 1
-                    ), shape_filter=pm.ShapeFilter(group=HUMAN_GROUP))) > 0) if self.body.space else False
+                    ), shape_filter=pm.ShapeFilter(group=HUMAN_GROUP, categories=HUMAN_CATEGORY))) > 0) if self.body.space else False
+
+        if self.body.position.y > 5 or (self.body.position.y > -2 and (not landed_left and not landed_right)):
+            self.breath -= dt
+            if self.breath <= 0:
+                self.breath = 0
+                self.state = "dead"
+                self.state_time = 99999
+                self.cur_animation = "dead"
+                return
+        else:
+            self.breath = min(self.breath + dt, max_breath)
 
         self.turnaround_time -= dt
         self.anim_time += dt * 5
@@ -119,7 +120,9 @@ class Human():
                 self.turnaround_time = turnaround_cooldown
             self.state_time = 10 + random.random() * 10
 
-        if (not landed_left and not landed_right) or abs(self.body.angle * 180 / math.pi) > 60:
+        if (not landed_left and not landed_right) or \
+            abs(self.body.angle * 180 / math.pi) > 40 \
+                or self.body.position.y > 0 or self.body.position.y < -50:
             # we're in the air, we panic and flail
             self.state = "run"
             self.state_time = 10 + random.random() * 10
@@ -160,9 +163,9 @@ class Human():
         anims = self.animation_data["meta"]["frameTags"]
         anim = [a for a in anims if a["name"] == self.cur_animation][0]
         frame_n = anim["from"] + math.floor(self.anim_time)
-        if frame_n > anim["to"] - anim["from"] + 1:
-            frame_n = anim["to"] - anim["from"]
-        frame_data = self.animation_data["frames"][frame_n]
+        if frame_n >= anim["to"] + 1:
+            frame_n = anim["to"]
+        frame_data = self.animation_data["frames"][math.floor(frame_n)]
         wdt = frame_data["frame"]["w"]
         hgt = frame_data["frame"]["h"]
         

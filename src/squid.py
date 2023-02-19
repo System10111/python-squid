@@ -393,12 +393,12 @@ class Squid():
         ldist = (self.ltentacles[0][-1][0].position - pos).length
         rdist = (self.ltentacles[1][-1][0].position - pos).length
 
-        if self.caught[0] is not None:
+        if self.caught[0] is not None and self.caught[0].body.game_object.state != "eaten":
             ldist += 999999
-            if self.caught[1] is not None:
+            if self.caught[1] is not None and self.caught[1].body.game_object.state != "eaten":
                 # both tentacles are occupied, so don't do anything
                 return
-        if self.caught[1] is not None:
+        if self.caught[1] is not None and self.caught[1].body.game_object.state != "eaten":
             rdist += 999999
 
         # find the distance from the point to the squid central's axis
@@ -422,8 +422,8 @@ class Squid():
 
         if len(catches) > 0:
             self.caught[0 if ldist < rdist else 1] = catches[0]
-            if catches[0].body.space is not None:
-                self.body.space.remove(catches[0].body)
+            if catches[0].space is not None:
+                catches[0].filter = pm.ShapeFilter(categories=0, mask=0)
 
         # apply equal and opposite force to the squid's body to prevent it from moving
         # self.body.apply_force_at_world_point(-force, point)
